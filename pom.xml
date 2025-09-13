@@ -97,11 +97,12 @@
     </build>
 
     <!-- Nexus repository configuration -->
-    <distributionManagement>
-        <snapshotRepository>
-            <id>nexus-snapshots</id>
-            <name>Nexus Snapshots Repository</name>
-            <url>http://localhost:8081/repository/maven-snapshots/</url>
-        </snapshotRepository>
-    </distributionManagement>
+   <distributionManagement>
+    <snapshotRepository>
+        <id>nexus-snapshots</id>
+        <name>pipelineProject-snapshots</name>
+        <url>http://localhost:8081/repository/pipelineProject-snapshots/</url>
+    </snapshotRepository>
+</distributionManagement>
+
 </project>
