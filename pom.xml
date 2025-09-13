@@ -17,6 +17,7 @@
         <!-- SonarQube properties -->
         <sonar.projectKey>pipelineProject</sonar.projectKey>
         <sonar.host.url>http://localhost:9000</sonar.host.url>
+        <sonar.coverage.jacoco.xmlReportPaths>${project.basedir}/target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
     </properties>
 
     <dependencies>
@@ -65,7 +66,7 @@
                             <goal>prepare-agent</goal>
                         </goals>
                     </execution>
-                    <!-- Generate JaCoCo report after tests -->
+                    <!-- Generate JaCoCo report in verify phase -->
                     <execution>
                         <id>report</id>
                         <phase>verify</phase>
