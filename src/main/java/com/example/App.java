@@ -1,6 +1,6 @@
 package com.example;
 
-import org.junit.platform.commons.annotation.Testable; // optional
+
 
 @SuppressWarnings("unused")
 public class App {
