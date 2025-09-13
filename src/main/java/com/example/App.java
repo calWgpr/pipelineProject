@@ -2,9 +2,9 @@ package com.example;
 
 import java.util.logging.Logger;
 
+@Generated("coverage-ignore")
 public class App {
 
-    @Generated("coverage-ignore")
     private static final Logger logger = Logger.getLogger(App.class.getName());
 
     public static void main(String[] args) {
