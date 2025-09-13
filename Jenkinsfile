@@ -1,58 +1,138 @@
 pipeline {
   agent any
 
-  // If you have a Maven tool named "M3" in Jenkins (Global Tool Config)
-  tools { maven "M3" }
+  tools { maven 'M3' }              // make sure a Maven installation named "M3" exists in Jenkins
 
-  // Build on every push via webhook (if configured) and also poll every 2 min as fallback
   triggers {
-    githubPush()           // requires GitHub plugin + webhook
-    pollSCM('H/2 * * * *') // fallback: polls every ~2 minutes
+    githubPush()
+    pollSCM('H/2 * * * *')         // fallback poll every ~2 minutes
   }
 
   options {
-    skipDefaultCheckout(true) // we'll do an explicit checkout with clean
+    skipDefaultCheckout(true)
     timestamps()
+  }
+
+  environment {
+    REPO_URL = 'https://github.com/calWgpr/pipelineProject.git'
+    BRANCH = 'main'
+    SONAR_SERVER = 'sonarqube'                // name configured in Jenkins -> Configure System -> SonarQube servers
+    SONAR_PROJECT_KEY = 'pipelineProject'     // change if needed
+    NEXUS_URL = 'http://localhost:8081/repository/maven-releases/'
   }
 
   stages {
     stage('Checkout') {
       steps {
-        // Replace URL and credentialsId if private
+        // robust checkout (clean, fetch everything)
         checkout([$class: 'GitSCM',
-          branches: [[name: '*/main']],
-          userRemoteConfigs: [[
-            url: 'https://github.com/calWgpr/pipelineProject.git',
-            // credentialsId: 'github-cred-id' // <-- uncomment if private
-          ]],
+          branches: [[name: "*/${env.BRANCH}"]],
+          userRemoteConfigs: [[url: "${env.REPO_URL}"]],
           extensions: [
             [$class: 'CleanBeforeCheckout'],
-            [$class: 'PruneStaleBranch']
+            [$class: 'PruneStaleBranch'],
+            [$class: 'CloneOption', noTags: false, shallow: false, timeout: 20]
           ]
         ])
 
         script {
-          // Show the exact commit pulled
-          echo "GIT_COMMIT: ${env.GIT_COMMIT}"
+          echo "GIT_COMMIT (env): ${env.GIT_COMMIT}"
+        }
+      }
+    }
+
+    stage('SCM debug') {
+      steps {
+        script {
+          if (isUnix()) {
+            sh '''
+              echo "=== remote -v ==="
+              git remote -v
+              echo "=== fetch ==="
+              git fetch --all --tags
+              echo "=== HEAD ==="
+              git rev-parse HEAD || true
+              echo "=== origin/${BRANCH} ==="
+              git rev-parse origin/${BRANCH} || true
+              echo "=== last 5 commits on origin/${BRANCH} ==="
+              git --no-pager log -n5 origin/${BRANCH} --pretty=format:"%h %an %s"
+            '''
+          } else {
+            bat """
+              echo === remote -v ===
+              git remote -v
+              echo === fetch ===
+              git fetch --all --tags
+              echo === HEAD ===
+              git rev-parse HEAD || echo .
+              echo === origin/${BRANCH} ===
+              git rev-parse origin/${BRANCH} || echo .
+              echo === last 5 commits on origin/${BRANCH} ===
+              git --no-pager log -n5 origin/${BRANCH} --pretty=format:"%h %an %s"
+            """
+          }
         }
       }
     }
 
     stage('Build') {
       steps {
-        // Windows agent:
-        bat 'mvn -v && mvn -B -U clean package'
-        // Linux agent (if you use Linux node instead):
-        // sh 'mvn -v && mvn -B -U clean package'
+        script {
+          if (isUnix()) {
+            sh 'mvn -v && mvn -B -U clean package'
+          } else {
+            bat 'mvn -v && mvn -B -U clean package'
+          }
+        }
       }
     }
 
     stage('Test') {
       steps {
-        // Windows:
-        bat 'mvn -B test'
-        // Linux:
-        // sh 'mvn -B test'
+        script {
+          if (isUnix()) {
+            sh 'mvn -B test'
+          } else {
+            bat 'mvn -B test'
+          }
+        }
+      }
+    }
+
+    stage('SonarQube analysis') {
+      steps {
+        withSonarQubeEnv("${SONAR_SERVER}") {
+          script {
+            if (isUnix()) {
+              sh "mvn -B sonar:sonar -Dsonar.projectKey=${SONAR_PROJECT_KEY} -Dsonar.host.url=http://localhost:9000"
+            } else {
+              bat "mvn -B sonar:sonar -Dsonar.projectKey=${SONAR_PROJECT_KEY} -Dsonar.host.url=http://localhost:9000"
+            }
+          }
+        }
+      }
+    }
+
+    stage('Quality Gate') {
+      steps {
+        timeout(time: 2, unit: 'MINUTES') {
+          waitForQualityGate abortPipeline: true
+        }
+      }
+    }
+
+    stage('Publish to Nexus') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: 'nexus-cred', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+          script {
+            if (isUnix()) {
+              sh "mvn -B deploy -DaltDeploymentRepository=nexus::default::${NEXUS_URL} -Dnexus.user=$NEXUS_USER -Dnexus.pass=$NEXUS_PASS"
+            } else {
+              // Windows uses %VAR% expansion inside bat
+              bat "mvn -B deploy -DaltDeploymentRepository=nexus::default::${NEXUS_URL} -Dnexus.user=%NEXUS_USER% -Dnexus.pass=%NEXUS_PASS%"
+            }
+          }
+        }
       }
     }
 
@@ -65,10 +145,9 @@ pipeline {
 
   post {
     always {
-      // Print commits that triggered this build
       script {
         if (currentBuild.changeSets.size() == 0) {
-          echo 'No changeSets detected (manual or scheduled run).'
+          echo 'No changeSets detected (manual or scheduled run). Check the "SCM debug" output above for the actual commit that was fetched.'
         } else {
           for (cs in currentBuild.changeSets) {
             for (entry in cs.items) {
