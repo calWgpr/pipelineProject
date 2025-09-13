@@ -16,15 +16,14 @@ pipeline {
   environment {
     REPO_URL = 'https://github.com/calWgpr/pipelineProject.git'
     BRANCH = 'main'
-    SONAR_SERVER = 'sonarqube'                // name configured in Jenkins -> Configure System -> SonarQube servers
-    SONAR_PROJECT_KEY = 'pipelineProject'     // change if needed
+    SONAR_SERVER = 'sonarqube'
+    SONAR_PROJECT_KEY = 'pipelineProject'
     NEXUS_URL = 'http://localhost:8081/repository/maven-releases/'
   }
 
   stages {
     stage('Checkout') {
       steps {
-        // robust checkout (clean, fetch everything)
         checkout([$class: 'GitSCM',
           branches: [[name: "*/${env.BRANCH}"]],
           userRemoteConfigs: [[url: "${env.REPO_URL}"]],
@@ -34,7 +33,6 @@ pipeline {
             [$class: 'CloneOption', noTags: false, shallow: false, timeout: 20]
           ]
         ])
-
         script {
           echo "GIT_COMMIT (env): ${env.GIT_COMMIT}"
         }
@@ -97,6 +95,16 @@ pipeline {
           }
         }
       }
+      post {
+        always {
+          junit '**/target/surefire-reports/*.xml'
+          jacoco execPattern: '**/target/jacoco.exec',
+                 classPattern: '**/target/classes',
+                 sourcePattern: '**/src/main/java',
+                 inclusionPattern: '**/*.class',
+                 exclusionPattern: ''
+        }
+      }
     }
 
     stage('SonarQube analysis') {
@@ -126,7 +134,6 @@ pipeline {
             if (isUnix()) {
               sh "mvn -B deploy -DaltDeploymentRepository=nexus::default::${NEXUS_URL} -Dnexus.user=$NEXUS_USER -Dnexus.pass=$NEXUS_PASS"
             } else {
-              // Windows uses %VAR% expansion inside bat
               bat "mvn -B deploy -DaltDeploymentRepository=nexus::default::${NEXUS_URL} -Dnexus.user=%NEXUS_USER% -Dnexus.pass=%NEXUS_PASS%"
             }
           }
