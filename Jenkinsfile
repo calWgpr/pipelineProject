@@ -18,7 +18,7 @@ pipeline {
     BRANCH = 'main'
     SONAR_SERVER = 'sonarqube'
     SONAR_PROJECT_KEY = 'pipelineProject'
-    NEXUS_URL = 'http://localhost:8081/repository/maven-releases/'
+    NEXUS_URL = 'http://localhost:8081/repository/pipelineProject-snapshots/'
   }
 
   stages {
@@ -128,18 +128,17 @@ pipeline {
     }
 
     stage('Publish to Nexus') {
-      steps {
-        withCredentials([usernamePassword(credentialsId: 'nexus-cred', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+        steps {
           script {
             if (isUnix()) {
-              sh "mvn -B deploy -DaltDeploymentRepository=nexus::default::${NEXUS_URL} -Dnexus.user=$NEXUS_USER -Dnexus.pass=$NEXUS_PASS"
+              sh "mvn -B deploy"
             } else {
-              bat "mvn -B deploy -DaltDeploymentRepository=nexus::default::${NEXUS_URL} -Dnexus.user=%NEXUS_USER% -Dnexus.pass=%NEXUS_PASS%"
+              bat "mvn -B deploy"
             }
           }
         }
-      }
     }
+
 
     stage('Archive') {
       steps {
