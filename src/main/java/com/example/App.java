@@ -5,6 +5,6 @@ package com.example;
 
 public class App {
 public static void main(String[] args) {
-        // nothing happe
+                System.out.println("App started");
     }
 }
